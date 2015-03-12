@@ -32,6 +32,7 @@
 
     // Save the previous value of the `Backbone` variable, so that it can be
     // restored later on, if `noConflict` is used.
+    // 暂存现有的Backbone变量（如果有的话），用于防止冲突
     var previousBackbone = root.Backbone;
 
     // Create local references to array methods we'll want to use later.
@@ -47,6 +48,7 @@
 
     // Runs Backbone.js in *noConflict* mode, returning the `Backbone` variable
     // to its previous owner. Returns a reference to this Backbone object.
+    // 执行后全局Backbone会恢复成之前的Backbone变量
     Backbone.noConflict = function() {
         root.Backbone = previousBackbone;
         return this;
@@ -55,12 +57,14 @@
     // Turn on `emulateHTTP` to support legacy HTTP servers. Setting this option
     // will fake `"PATCH"`, `"PUT"` and `"DELETE"` requests via the `_method` parameter and
     // set a `X-Http-Method-Override` header.
+    // 用来模拟restful API?
     Backbone.emulateHTTP = false;
 
     // Turn on `emulateJSON` to support legacy servers that can't deal with direct
     // `application/json` requests ... this will encode the body as
     // `application/x-www-form-urlencoded` instead and will send the model in a
     // form param named `model`.
+    // 用于不支持json格式的服务器
     Backbone.emulateJSON = false;
 
     // Backbone.Events
@@ -76,9 +80,11 @@
     //     object.on('expand', function(){ alert('expanded'); });
     //     object.trigger('expand');
     //
+    // backbone事件模块，可以扩展到任意对象上，使该对象支持自定义事件。
     var Events = Backbone.Events = {};
 
     // Regular expression used to split event strings.
+    // 事件之间的分隔符，触发多个事件时用空格分隔
     var eventSplitter = /\s+/;
 
     // Iterates over the standard `event, callback` (as well as the fancy multiple
@@ -86,6 +92,10 @@
     // maps `{event: callback}`), reducing them by manipulating `events`.
     // Passes a normalized (single event name and callback), as well as the `context`
     // and `ctx` arguments to `iteratee`.
+    // 统一的事件处理api，调用iteratee方法处理每个事件
+    // 同时支持字符串单事件或多事件`"change:name add", callback`和对象映射{ add: callback }形式的事件
+    // memo为事件注册列表，缓存在事件发布对象上
+    // ctx是执行上下文的默认值，默认为事件发布对象，未指定context时生效
     var eventsApi = function(iteratee, memo, name, callback, context, ctx) {
         var i = 0,
             names, length;
@@ -114,6 +124,37 @@
 
     // Inversion-of-control versions of `on`. Tell *this* object to listen to
     // an event in another object... keeping track of what it's listening to.
+    // 让一个对象监听另一个对象的某个事件是否发生
+    // 本质上listener.listenTo(obj, event, callback)相当于obj.on(event, callback, listener)
+    // 好处是在需要时可以一次性移除所有listener监听的事件
+    // 不管事监听对象还是被监听对象都会有一个唯一的_listenId来标识自身
+    //
+    // 可以被多个对象监听
+    // obj: {
+    //     _listenId: id,
+    //     _listeners: {
+    //         listenerId: listener,
+    //         ...
+    //     },
+    //     _events: {
+    //         name: [{ callback: callback, context: context, ctx: ctx }, {}, ....],
+    //         ...
+    //     }
+    // }
+    // 可以监听多个对象
+    // listener: {
+    //     _listenId: listenerId,
+    //     _listeningTo: {
+    //         id: {
+    //             obj: obj,
+    //             events: {
+    //                 name: callback,
+    //                 ...
+    //             }
+    //         },
+    //         ...
+    //     }
+    // }
     Events.listenTo = function(obj, name, callback) {
         if (!obj) return this;
         var id = obj._listenId || (obj._listenId = _.uniqueId('l'));
@@ -133,12 +174,18 @@
         }
 
         // Bind callbacks on obj, and keep track of them on listening.
+        // 完成真正的事件监听工作=。=
         obj.on(name, callback, this);
+        // 往listening.events记录事件及其回调，以便停止监听时可以从obj的事件列表中删除相应事件
         listening.events = eventsApi(onApi, listening.events, name, callback);
         return this;
     };
 
     // The reducing API that adds a callback to the `events` object.
+    // events: {
+    //     name: [{ callback: callback, context: context, ctx: ctx }, {}, ....],
+    //     ...
+    // }
     var onApi = function(events, name, callback, context, ctx) {
         if (callback) {
             var handlers = events[name] || (events[name] = []);
