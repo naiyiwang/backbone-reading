@@ -186,6 +186,7 @@
     //     name: [{ callback: callback, context: context, ctx: ctx }, {}, ....],
     //     ...
     // }
+    // 注册事件
     var onApi = function(events, name, callback, context, ctx) {
         if (callback) {
             var handlers = events[name] || (events[name] = []);
@@ -202,6 +203,21 @@
     // callbacks with that function. If `callback` is null, removes all
     // callbacks for the event. If `name` is null, removes all bound
     // callbacks for all events.
+    // 取消事件注册
+    // 移除change事件下的onChange回调
+    // object.off("change", onChange);
+
+    // 移除change下的所有事件
+    // object.off("change");
+
+    // 移除所有事件下的onChange回调
+    // object.off(null, onChange);
+
+    // 移除所有事件下context为context的回调
+    // object.off(null, null, context);
+
+    // 移除所有事件
+    // object.off();
     Events.off = function(name, callback, context) {
         if (!this._events) return this;
         this._events = eventsApi(offApi, this._events, name, callback, context);
@@ -210,6 +226,8 @@
         if (listeners) {
             // Listeners always bind themselves as the context, so if `context`
             // is passed, narrow down the search to just that listener.
+            // 移除通过listenTo方法监听的listener中缓存的_listeningTo下对应的监听事件
+            // 相当于一次监听事件的同步
             var ids = context != null ? [context._listenId] : _.keys(listeners);
 
             for (var i = 0; i < ids.length; i++) {
@@ -221,6 +239,7 @@
                 // Tell each listener to stop, without infinitely calling `#off`.
                 internalStopListening(listener, this, name, callback);
             }
+            // 为空时重置listeners对象，以免再次进入当前的if判断时报错
             if (_.isEmpty(listeners)) this._listeners = void 0;
         }
         return this;
@@ -228,6 +247,7 @@
 
     // Tell this object to stop listening to either specific events ... or
     // to every object it's currently listening to.
+    // 用法类似off方法
     Events.stopListening = function(obj, name, callback) {
         // Use an internal stopListening, telling it to call off on `obj`.
         if (this._listeningTo) internalStopListening(this, obj, name, callback, true);
@@ -235,6 +255,7 @@
     };
 
     // The reducing API that removes a callback from the `events` object.
+    // 返回剩余的事件
     var offApi = function(events, name, callback, context) {
         // Remove all callbacks for all events.
         if (!events || !name && !context && !callback) return;
@@ -245,13 +266,16 @@
             var handlers = events[name];
 
             // Bail out if there are no events stored.
+            // 没有找到注册事件，跳出循环
             if (!handlers) break;
 
             // Find any remaining events.
+            // 如果指定了回调或上下文对象，则再深入事件注册数组中查找
             var remaining = [];
             if (callback || context) {
                 for (var j = 0, k = handlers.length; j < k; j++) {
                     var handler = handlers[j];
+                    // 将不符合指定callback和context的handler推入remaing数组中
                     if (
                         callback && callback !== handler.callback &&
                         callback !== handler.callback._callback ||
@@ -263,6 +287,7 @@
             }
 
             // Replace events if there are any remaining.  Otherwise, clean up.
+            // 如果指定了回调或上下文对象，则返回remaing数组，否则删除对应事件下的所有回调
             if (remaining.length) {
                 events[name] = remaining;
             } else {
@@ -283,10 +308,12 @@
             // listening to obj. Break out early.
             if (!listening) break;
             obj = listening.obj;
+            // 让事件源取消对对应事件的监听
             if (offEvents) obj._events = eventsApi(offApi, obj._events, name, callback, listener);
 
             // Events will only ever be falsey if all the event callbacks
             // are removed. If so, stop delete the listening.
+            // 同步删除监听对象缓存的被监听对象的事件列表
             var events = eventsApi(offApi, listening.events, name, callback);
             if (!events) {
                 delete listeningTo[id];
