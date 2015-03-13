@@ -340,13 +340,16 @@
 
     // Reduces the event callbacks into a map of `{event: onceWrapper}`.
     // `offer` unbinds the `onceWrapper` after it as been called.
+    // 返回{event: onceWrapper }的对象形式事件用于监听
     var onceMap = function(name, callback, offer) {
         return eventsApi(function(map, name, callback, offer) {
             if (callback) {
+                // 用once包装callback，保证执行完后解绑，并只执行一次
                 var once = map[name] = _.once(function() {
                     offer(name, once);
                     callback.apply(this, arguments);
                 });
+                // _callback存的是真正的回调函数，用于off时判断，因为handler.callback是经过once包装过的
                 once._callback = callback;
             }
             return map;
@@ -374,6 +377,7 @@
             var events = obj._events[name];
             var allEvents = obj._events.all;
             if (events) triggerEvents(events, args);
+            // 如果监听了all事件，则所有事件的触发都会触发all事件的回调
             if (allEvents) triggerEvents(allEvents, [name].concat(args));
         }
         return obj;
@@ -382,6 +386,7 @@
     // A difficult-to-believe, but optimized internal dispatch function for
     // triggering events. Tries to keep the usual cases speedy (most internal
     // Backbone events have 3 arguments).
+    // 用call比用apply快？？
     var triggerEvents = function(events, args) {
         var ev, i = -1,
             l = events.length,
@@ -435,6 +440,7 @@
                 };
         }
     };
+    // 为Backbone类添加underscore方法
     var addUnderscoreMethods = function(Class, methods, attribute) {
         _.each(methods, function(length, method) {
             if (_[method]) Class.prototype[method] = addMethod(length, method, attribute);
@@ -1495,12 +1501,14 @@
         });
 
         // Default JSON-request options.
+        // 默认返回json数据
         var params = {
             type: type,
             dataType: 'json'
         };
 
         // Ensure that we have a URL.
+        // options中的url优先，options中不提供url则从model中拿
         if (!options.url) {
             params.url = _.result(model, 'url') || urlError();
         }
@@ -1546,6 +1554,7 @@
 
         // Make the request, allowing the user to override any Ajax options.
         var xhr = options.xhr = Backbone.ajax(_.extend(params, options));
+        // 触发model的request事件，自己手动注册
         model.trigger('request', model, xhr, options);
         return xhr;
     };
