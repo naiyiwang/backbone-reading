@@ -1581,6 +1581,7 @@
     // matched. Creating a new one sets its `routes` hash, if not set statically.
     var Router = Backbone.Router = function(options) {
         options || (options = {});
+        // 如果初始化时指定了routes就会覆盖原型上的routes
         if (options.routes) this.routes = options.routes;
         this._bindRoutes();
         this.initialize.apply(this, arguments);
@@ -1606,6 +1607,8 @@
         //       ...
         //     });
         //
+        // 手动绑定一个单独的路由，方便动态添加路由
+        // 也可以添加一个新的url映射到原有的路由函数上
         route: function(route, name, callback) {
             if (!_.isRegExp(route)) route = this._routeToRegExp(route);
             if (_.isFunction(name)) {
@@ -1617,8 +1620,10 @@
             Backbone.history.route(route, function(fragment) {
                 var args = router._extractParameters(route, fragment);
                 if (router.execute(callback, args, name) !== false) {
+                    // 触发router对象上的route事件，自己按需监听
                     router.trigger.apply(router, ['route:' + name].concat(args));
                     router.trigger('route', name, args);
+                    // 触发Backbone默认history对象上的route事件
                     Backbone.history.trigger('route', router, name, args);
                 }
             });
@@ -1627,6 +1632,7 @@
 
         // Execute a route handler with the provided parameters.  This is an
         // excellent place to do pre-route setup or post-route cleanup.
+        // 执行路由对应的回调
         execute: function(callback, args, name) {
             if (callback) callback.apply(this, args);
         },
@@ -1651,6 +1657,7 @@
 
         // Convert a route string into a regular expression, suitable for matching
         // against the current location hash.
+        // 将路由字符串转化为正则表达式
         _routeToRegExp: function(route) {
             route = route.replace(escapeRegExp, '\\$&')
                 .replace(optionalParam, '(?:$1)?')
@@ -1728,6 +1735,7 @@
 
         // In IE6, the hash fragment and search params are incorrect if the
         // fragment contains `?`.
+        // 兼容IE6...IE6的url中有问号会出错？
         getSearch: function() {
             var match = this.location.href.replace(/#.*/, '').match(/\?.+/);
             return match ? match[0] : '';
@@ -1810,6 +1818,7 @@
             // Proxy an iframe to handle location events if the browser doesn't
             // support the `hashchange` event, HTML5 history, or the user wants
             // `hashChange` but not `pushState`.
+            // 浏览器不支持hashchange事件时的解决方案
             if (!this._hasHashChange && this._wantsHashChange && !this._usePushState) {
                 var iframe = document.createElement('iframe');
                 iframe.src = 'javascript:0';
@@ -1823,6 +1832,7 @@
             }
 
             // Add a cross-platform `addEventListener` shim for older browsers.
+            // 兼容IE...
             var addEventListener = window.addEventListener || function(eventName, listener) {
                 return attachEvent('on' + eventName, listener);
             };
@@ -1842,6 +1852,7 @@
 
         // Disable Backbone.history, perhaps temporarily. Not useful in a real app,
         // but possibly useful for unit testing Routers.
+        // 停止路由。。用于单元测试。。。
         stop: function() {
             // Add a cross-platform `removeEventListener` shim for older browsers.
             var removeEventListener = window.removeEventListener || function(eventName, listener) {
