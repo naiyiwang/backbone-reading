@@ -88,6 +88,15 @@
 
     // Bind an event to a `callback` function. Passing `"all"` will bind
     // the callback to all events fired.
+    // this._events: {
+    //     eventName: [
+    //       { callback: callback, context: context, ctx: ctx },
+    //       ...
+    //     ],
+    //     ...
+    // }
+    // 注册事件
+    // context提供修改回调执行时this指向的功能，默认是调用on方法的对象
     on: function(name, callback, context) {
       if (!eventsApi(this, 'on', name, [callback, context]) || !callback) return this;
       this._events || (this._events = {});
@@ -98,6 +107,7 @@
 
     // Bind an event to only be triggered a single time. After the first time
     // the callback is invoked, it will be removed.
+    // 相当于第一次执行callback之后马上把callback从事件监听列表中解绑
     once: function(name, callback, context) {
       if (!eventsApi(this, 'once', name, [callback, context]) || !callback) return this;
       var self = this;
@@ -116,6 +126,7 @@
     off: function(name, callback, context) {
       var retain, ev, events, names, i, l, j, k;
       if (!this._events || !eventsApi(this, 'off', name, [callback, context])) return this;
+      // 快速移除所有事件的回调：重新赋值一个空对象。。。
       if (!name && !callback && !context) {
         this._events = {};
         return this;
@@ -124,10 +135,12 @@
       for (i = 0, l = names.length; i < l; i++) {
         name = names[i];
         if (events = this._events[name]) {
+          // 这里进行了反向操作，先把events全部清空，再把需要的加回去
           this._events[name] = retain = [];
           if (callback || context) {
             for (j = 0, k = events.length; j < k; j++) {
               ev = events[j];
+              // context也会成为判断是否移除事件回调的条件
               if ((callback && callback !== ev.callback && callback !== ev.callback._callback) ||
                   (context && context !== ev.context)) {
                 retain.push(ev);
@@ -151,22 +164,35 @@
       if (!eventsApi(this, 'trigger', name, args)) return this;
       var events = this._events[name];
       var allEvents = this._events.all;
+      // 先触发指定事件
       if (events) triggerEvents(events, args);
+      // 再触发all事件
       if (allEvents) triggerEvents(allEvents, arguments);
       return this;
     },
 
     // Tell this object to stop listening to either specific events ... or
     // to every object it's currently listening to.
+    // 可以监听多个对象
+    // listener: {
+    //     _listenId: listenerId,
+    //     _listeningTo: {
+    //         id: obj,
+    //         ...
+    //     }
+    // }
     stopListening: function(obj, name, callback) {
       var listeningTo = this._listeningTo;
       if (!listeningTo) return this;
+      // 不指定具体事件name和callback，则全部移除
       var remove = !name && !callback;
       if (!callback && typeof name === 'object') callback = this;
+      // 如果指定了obj，则只移除该obj下的对应callback
       if (obj) (listeningTo = {})[obj._listenId] = obj;
       for (var id in listeningTo) {
         obj = listeningTo[id];
         obj.off(name, callback, this);
+        // _.isEmpty(obj._events)这个判断条件好像不够好。。。obj可能还注册着其他对象的回调
         if (remove || _.isEmpty(obj._events)) delete this._listeningTo[id];
       }
       return this;
@@ -175,11 +201,17 @@
   };
 
   // Regular expression used to split event strings.
+  // 事件之间的分隔符，触发多个事件时用空格分隔
   var eventSplitter = /\s+/;
 
   // Implement fancy features of the Events API such as multiple event
   // names `"change blur"` and jQuery-style event maps `{change: action}`
   // in terms of the existing API.
+  // 处理 obj.on({
+  //   eventName: callback
+  // }) 和 obj.on('event1 event2', callback); 形式的调用。
+  // 兼容on, off, trigger, once方法
+  // 巧妙地实现了代码复用，增强了API的通用性
   var eventsApi = function(obj, action, name, rest) {
     if (!name) return true;
 
@@ -206,6 +238,7 @@
   // A difficult-to-believe, but optimized internal dispatch function for
   // triggering events. Tries to keep the usual cases speedy (most internal
   // Backbone events have 3 arguments).
+  // events是包含了所有回调函数的数组
   var triggerEvents = function(events, args) {
     var ev, i = -1, l = events.length, a1 = args[0], a2 = args[1], a3 = args[2];
     switch (args.length) {
@@ -222,6 +255,26 @@
   // Inversion-of-control versions of `on` and `once`. Tell *this* object to
   // listen to an event in another object ... keeping track of what it's
   // listening to.
+  // 让一个对象监听另一个对象的某个事件是否发生
+  // 本质上看，listener.listenTo(obj, event, callback)相当于obj.on(event, callback, listener)
+  // 就是把context指定为了当前对象
+  // 好处是在需要时可以一次性移除所有listener监听的事件
+  //
+  // 可以被多个对象监听
+  // obj: {
+  //     _listenId: id, // 每个对象生产一个唯一的listenId
+  //     _events: {
+  //         name: [{ callback: callback, context: context, ctx: ctx }, {}, ....],
+  //         ...
+  //     }
+  // }
+  // 可以监听多个对象
+  // listener: {
+  //     _listeningTo: {
+  //         id: obj,
+  //         ...
+  //     }
+  // }
   _.each(listenMethods, function(implementation, method) {
     Events[method] = function(obj, name, callback) {
       var listeningTo = this._listeningTo || (this._listeningTo = {});
