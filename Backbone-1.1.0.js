@@ -391,6 +391,7 @@
       options || (options = {});
 
       // Run validation.
+      // set之前先验证属性是否合法
       if (!this._validate(attrs, options)) return false;
 
       // Extract attributes and options.
@@ -550,7 +551,9 @@
       // `set(attr).save(null, opts)` with validation. Otherwise, check if
       // the model will be valid when the attributes, if any, are set.
       //
-      // 传了key、value且wait为false，更新model；不传则验证
+      // wait决定了是否要马上更新本地model
+      // 传了key、value且wait为false，立即更新本地model；
+      // 不传key、value或者wait为true则对model进行验证，等服务器返回结果后再set model
       if (attrs && !options.wait) {
         if (!this.set(attrs, options)) return false;
       } else {
@@ -1099,9 +1102,13 @@
   var View = Backbone.View = function(options) {
     this.cid = _.uniqueId('view');
     options || (options = {});
+    // 有选择地获取属性
     _.extend(this, _.pick(options, viewOptions));
+    // 确保生成一个el
     this._ensureElement();
+    // 初始化
     this.initialize.apply(this, arguments);
+    // 绑定DOM事件
     this.delegateEvents();
   };
 
@@ -1136,6 +1143,8 @@
 
     // Remove this view by taking the element out of the DOM, and removing any
     // applicable Backbone.Events listeners.
+    // 把dom元素从dom树中移除，并删除所有监听事件回调
+    // 如果有嵌套的子视图，最好包装一下该方法把子视图也remove掉
     remove: function() {
       this.$el.remove();
       this.stopListening();
@@ -1144,10 +1153,14 @@
 
     // Change the view's element (`this.el` property), including event
     // re-delegation.
+    // 可以用来给view重新绑定一个DOM元素
     setElement: function(element, delegate) {
+      // 先解绑事件
       if (this.$el) this.undelegateEvents();
+      // 设置$el与el属性
       this.$el = element instanceof Backbone.$ ? element : Backbone.$(element);
       this.el = this.$el[0];
+      // 根据events属性绑定DOM事件，View初始化时在initialize执行后会执行此方法
       if (delegate !== false) this.delegateEvents();
       return this;
     },
@@ -1175,9 +1188,11 @@
         if (!_.isFunction(method)) method = this[events[key]];
         if (!method) continue;
 
+        // 根据空格分割两个参数，左边是事件名，右边是选择器
         var match = key.match(delegateEventSplitter);
         var eventName = match[1], selector = match[2];
         method = _.bind(method, this);
+        // 给绑定的事件添加命名空间
         eventName += '.delegateEvents' + this.cid;
         if (selector === '') {
           this.$el.on(eventName, method);
@@ -1192,6 +1207,7 @@
     // You usually don't need to use this, but may wish to if you have multiple
     // Backbone views attached to the same DOM element.
     undelegateEvents: function() {
+      // 根据命名空间解绑所有事件
       this.$el.off('.delegateEvents' + this.cid);
       return this;
     },
@@ -1200,8 +1216,12 @@
     // If `this.el` is a string, pass it through `$()`, take the first
     // matching element, and re-assign it to `el`. Otherwise, create
     // an element from the `id`, `className` and `tagName` properties.
+    //
+    // 确保每个View都有个DOM元素作为容器
     _ensureElement: function() {
+      // 没传el则根据tagName来生成el，并设置id、className
       if (!this.el) {
+        // 用_.result是为了保证兼容属性是值或者函数的情况
         var attrs = _.extend({}, _.result(this, 'attributes'));
         if (this.id) attrs.id = _.result(this, 'id');
         if (this.className) attrs['class'] = _.result(this, 'className');
@@ -1657,6 +1677,7 @@
   // Helper function to correctly set up the prototype chain, for subclasses.
   // Similar to `goog.inherits`, but uses a hash of prototype properties and
   // class properties to be extended.
+  // 继承View，Model，Collection用
   var extend = function(protoProps, staticProps) {
     var parent = this;
     var child;
@@ -1664,29 +1685,39 @@
     // The constructor function for the new subclass is either defined by you
     // (the "constructor" property in your `extend` definition), or defaulted
     // by us to simply call the parent's constructor.
+    //
+    // 可以在protoProps直接指定构造函数
     if (protoProps && _.has(protoProps, 'constructor')) {
       child = protoProps.constructor;
     } else {
+      // 不指定构造函数时，借用父类的构造函数
       child = function(){ return parent.apply(this, arguments); };
     }
 
     // Add static properties to the constructor function, if supplied.
+    // 继承静态方法、属性
     _.extend(child, parent, staticProps);
 
     // Set the prototype chain to inherit from `parent`, without calling
     // `parent`'s constructor function.
+    //
+    // 构造原型链
     var Surrogate = function(){ this.constructor = child; };
     Surrogate.prototype = parent.prototype;
+    // child.prototype能访问到父类的原型，child的对象能访问到child.prototype，原型链达成
     child.prototype = new Surrogate;
 
     // Add prototype properties (instance properties) to the subclass,
     // if supplied.
+    // 添加原型属性与方法
     if (protoProps) _.extend(child.prototype, protoProps);
 
     // Set a convenience property in case the parent's prototype is needed
     // later.
+    // 提供一个直接访问父类原型的静态属性
     child.__super__ = parent.prototype;
 
+    // 返回子类构造函数
     return child;
   };
 
